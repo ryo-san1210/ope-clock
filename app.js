@@ -1,6 +1,6 @@
 'use strict';
 /* オペ時計 */
-const VERSION = '1.0.11';
+const VERSION = '1.0.12';
 const KEY = 'opeclock.v1';
 const $ = (id) => document.getElementById(id);
 
@@ -49,42 +49,69 @@ async function sample(src) {
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const server = await src.parse(r);
   if (!isFinite(server)) throw new Error('parse');
-  return { offset: server - (t0 + t1) / 2 + (src.bias || 0), rtt: t1 - t0 };
+  return { offset: server - (t0 + t1) / 2 + (src.bias || 0), rtt: t1 - t0, server, t0, t1 };
+}
+// 秒までしか返さない相手：本当の時刻は [秒, 秒+1) のどこか。間隔をずらして何回か聞き、ずれのありうる幅を狭める
+async function measureCoarse(src) {
+  let lo = -Infinity, hi = Infinity, rtt = Infinity;
+  for (let i = 0; i < 6; i++) {
+    const s = await sample({ ...src, bias: 0 });
+    lo = Math.max(lo, s.server - s.t1);
+    hi = Math.min(hi, s.server + 1000 - s.t0);
+    rtt = Math.min(rtt, s.rtt);
+    await new Promise((r) => setTimeout(r, 170));
+  }
+  if (!(lo <= hi)) throw new Error('range');
+  return { offset: (lo + hi) / 2, rtt };
+}
+async function measure(src) {
+  if (src.coarse) return measureCoarse(src);
+  let best = null;
+  for (let i = 0; i < 3; i++) {
+    const s = await sample(src);
+    if (!best || s.rtt < best.rtt) best = s;
+  }
+  return best;
 }
 const SOURCES = [
   { name: 'timeapi.io', url: 'https://timeapi.io/api/time/current/zone?timeZone=Asia/Tokyo',
     parse: async (r) => { const j = await r.json(); return Date.UTC(j.year, j.month - 1, j.day, j.hour - 9, j.minute, j.seconds, j.milliSeconds); } },
-  { name: 'Cloudflare', url: 'https://www.cloudflare.com/cdn-cgi/trace',
+  { name: 'Cloudflare', url: 'https://www.cloudflare.com/cdn-cgi/trace', coarse: true,
     parse: async (r) => { const m = /ts=([\d.]+)/.exec(await r.text()); return m ? parseFloat(m[1]) * 1000 : NaN; } },
-  { name: 'このページのサーバー', url: location.href.split('#')[0].replace(/[^/]*$/, '') + 'manifest.webmanifest', method: 'HEAD', bias: 500,
+  { name: 'このページのサーバー', url: location.href.split('#')[0].replace(/[^/]*$/, '') + 'manifest.webmanifest', method: 'HEAD', coarse: true,
     parse: async (r) => { const d = r.headers.get('date'); return d ? Date.parse(d) : NaN; } },
 ];
 async function doSync() {
   if (sync.running || !navigator.onLine) { renderSync(); return; }
   sync.running = true;
+  let done = false;
   for (const src of SOURCES) {
     try {
-      let best = null;
-      for (let i = 0; i < 3; i++) {
-        const s = await sample(src);
-        if (!best || s.rtt < best.rtt) best = s;
-      }
+      const best = await measure(src);
       sync.offset = best.offset; sync.rtt = best.rtt; sync.ok = true; sync.at = Date.now(); sync.source = src.name; sync.lastErr = '';
+      done = true;
       break;
     } catch (e) { sync.lastErr = String(e.message || e); }
   }
+  sync.failedLast = !done; // つながっているはずなのにどこにも届かなかった
   sync.running = false;
   renderSync();
 }
 function syncFresh() { return sync.ok && sync.at && Date.now() - sync.at < 2 * 3600000; }
+// 緑＝ネットにつながっていて、2 時間以内に合わせてある。それ以外は灰色（補正は最後に測ったずれを使い続ける）
+function syncGreen() { return syncFresh() && navigator.onLine && !sync.failedLast; }
 function hm(ms) { const d = jst(ms); return pad(d.h) + ':' + pad(d.m); }
 function syncText() {
   if (!sync.ok) return navigator.onLine ? '時刻合わせができていません。端末の時計を使っています。' : 'オフラインです。端末の時計を使っています。';
   const off = sync.offset / 1000;
-  return `最終補正 ${hm(sync.at + sync.offset)}／ずれ ${off >= 0 ? '+' : ''}${off.toFixed(1)} 秒（${sync.source}）` + (syncFresh() ? '' : '\n2 時間以上合わせていません。');
+  const offTxt = `${off >= 0 ? '+' : ''}${off.toFixed(2)} 秒`;
+  const at = hm(sync.at + sync.offset);
+  if (!navigator.onLine) return `オフラインです（${at} に測ったずれ ${offTxt} を使っています）`;
+  if (sync.failedLast) return `ネットの時刻に届きません（${at} に測ったずれ ${offTxt} を使っています）`;
+  return `最終補正 ${at}／ずれ ${offTxt}（${sync.source}）` + (syncFresh() ? '' : '\n2 時間以上合わせていません。');
 }
 function renderSync() {
-  $('syncDot').classList.toggle('ok', syncFresh());
+  $('syncDot').classList.toggle('ok', syncGreen());
   $('syncInfo').textContent = syncText();
   if (!$('syncPop').classList.contains('hidden')) showSyncPop(true);
 }
