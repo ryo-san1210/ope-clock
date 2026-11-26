@@ -1,6 +1,6 @@
 'use strict';
 /* オペ時計 */
-const VERSION = '1.0.6';
+const VERSION = '1.0.7';
 const KEY = 'opeclock.v1';
 const $ = (id) => document.getElementById(id);
 
