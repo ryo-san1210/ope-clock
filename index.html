@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>オペ時計</title>
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="オペ時計">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage">
+  <div id="top">
+    <div id="date"></div>
+    <div id="subBox"><div class="label" id="subLabel"></div><div class="fit" id="subFit"><span class="txt" id="subTxt"></span></div></div>
+  </div>
+  <div id="mainBox"><div class="label" id="mainLabel"></div><div class="fit" id="mainFit"><span class="txt" id="mainTxt"></span></div></div>
+  <div id="bottom">
+    <button id="syncDot" aria-label="時刻合わせの状態"></button>
+    <div id="next"><span id="arrows"><svg viewBox="0 0 24 24"><path d="M8 4l8 8-8 8"/></svg><svg viewBox="0 0 24 24"><path d="M8 4l8 8-8 8"/></svg><svg viewBox="0 0 24 24"><path d="M8 4l8 8-8 8"/></svg></span><span id="nextTime"></span><span id="nextLabel"></span></div>
+  </div>
+  <div id="lockMark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div>
+</div>
+
+<div id="controls" class="hidden">
+  <div class="ctlCol" id="ctlLeft">
+    <button data-act="menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>メニュー</span></button>
+  </div>
+  <div class="ctlCol" id="ctlRight">
+    <button data-act="startPause" id="btnStart"><svg viewBox="0 0 24 24" class="icoPlay"><path d="M8 5l11 7-11 7z" class="fill"/></svg><svg viewBox="0 0 24 24" class="icoPause"><path d="M8 5v14M16 5v14"/></svg><span>開始</span></button>
+    <button data-act="reset" id="btnReset"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v5h5"/></svg><span>リセット</span></button>
+    <button data-act="timer" id="btnTimer"><svg viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2M10 2.5h4M12 2.5V6"/></svg><span>タイマー</span></button>
+  </div>
+</div>
+
+<!-- メニュー -->
+<div class="sheet hidden" id="sheetMenu">
+  <div class="sheetIn menuIn">
+    <div class="sheetHead"><h2>メニュー</h2><button class="close" data-close>閉じる</button></div>
+    <div class="menuGrid">
+      <button data-open="schedule">予定</button>
+      <button data-open="settings">設定</button>
+    </div>
+    <button id="lockBtn" class="lockBtn">画面をロックする</button>
+    <p class="hint">ロック中は画面に触れても反応しません。解除は画面を 2 秒長押しします。</p>
+  </div>
+</div>
+
+<div id="syncPop" class="hidden"></div>
+<div id="toast" class="hidden"></div>
+
+<!-- タイマー -->
+<div class="sheet hidden" id="sheetTimer">
+  <div class="sheetIn">
+    <div class="sheetHead"><h2>タイマー</h2><button class="close" data-close>閉じる</button></div>
+    <div class="seg3" id="modeTabs">
+      <button data-mode="down">カウントダウン</button>
+      <button data-mode="up">カウントアップ</button>
+      <button data-mode="target">指定時刻へカウントダウン</button>
+    </div>
+    <div class="pane" data-pane="down">
+      <p class="hint">よく使う時間</p>
+      <div class="presets" id="presetBtns"></div>
+      <p class="hint">数字で入れる（右から 秒・分・時。530 → 5分30秒）</p>
+      <div class="row"><input id="downInput" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="530" autocomplete="off"><span class="preview" id="downPreview"></span></div>
+      <button class="primary" id="downSet">この時間にする</button>
+    </div>
+    <div class="pane" data-pane="up">
+      <p class="hint">0 から数えます。開始・停止・リセットは、画面をタップすると右端に出るボタンで操作します。</p>
+      <button class="primary" id="upSet">カウントアップにする</button>
+    </div>
+    <div class="pane" data-pane="target">
+      <p class="hint">終わる時刻（1550 → 15:50）</p>
+      <div class="row"><input id="targetInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="1550" autocomplete="off"><span class="preview" id="targetPreview"></span></div>
+      <button class="primary" id="targetSet">この時刻にする</button>
+      <button class="primary alt" id="targetNext">次の予定まで</button>
+      <p class="hint">「次の予定まで」は、右下に出ている予定の時刻に合わせて自動で切り替わります。</p>
+    </div>
+  </div>
+</div>
+
+<!-- 予定 -->
+<div class="sheet hidden" id="sheetSchedule">
+  <div class="sheetIn">
+    <div class="sheetHead"><h2>予定</h2><button class="close" data-close>閉じる</button></div>
+    <div class="row wrap">
+      <select id="listSelect"></select>
+      <button id="listNew">新しく作る</button>
+      <button id="listRename">名前を変える</button>
+      <button id="listDelete" class="danger">この予定表を消す</button>
+    </div>
+    <div id="items"></div>
+    <button id="itemAdd">行を足す</button>
+    <div class="row wrap gapTop">
+      <label class="filebtn">テキストファイルを読み込む<input type="file" id="fileIn" accept=".txt,.csv,.tsv,text/plain,text/csv"></label>
+      <button id="exportBtn">テキストファイルに書き出す</button>
+    </div>
+    <p class="hint">書き方：1 行に「13:30 配信開始」。# で始まる行はメモ（1 行目の # は予定表の名前）。</p>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet hidden" id="sheetSettings">
+  <div class="sheetIn">
+    <div class="sheetHead"><h2>設定</h2><button class="close" data-close>閉じる</button></div>
+
+    <h3>表示</h3>
+    <div class="seg3" data-set="view"><button data-v="clock">時計だけ</button><button data-v="timer">タイマーだけ</button><button data-v="both">両方</button></div>
+    <p class="hint">両方のとき、大きく出すほう</p>
+    <div class="seg3" data-set="main"><button data-v="clock">メイン：時計</button><button data-v="timer">メイン：タイマー</button></div>
+    <label class="sw"><input type="checkbox" data-set="showSeconds">時計の秒を出す</label>
+    <label class="sw"><input type="checkbox" data-set="colonBlink">秒を出さないとき「:」を点滅させる</label>
+
+    <h3>色</h3>
+    <div class="presets" id="colorPresets"></div>
+    <div class="row"><label class="color">背景 <input type="color" data-set="bg"></label><label class="color">文字 <input type="color" data-set="fg"></label></div>
+
+    <h3>書体</h3>
+    <div class="seg3" data-set="font"><button data-v="bold">太めのゴシック</button><button data-v="light">細めのゴシック</button><button data-v="seg">デジタル時計風</button></div>
+
+    <h3>タイマー</h3>
+    <label class="sw"><input type="checkbox" data-set="warnOn">残りが少なくなったら黄色にする</label>
+    <div class="row">残り <input type="number" min="1" max="99" data-set="warnMin" class="num"> 分で黄色</div>
+    <label class="sw"><input type="checkbox" data-set="overBlink">0 を過ぎたら赤い数字を明滅させる</label>
+    <p class="hint">よく使う時間のボタン（分、カンマ区切り）</p>
+    <input type="text" data-set="presets" class="wide" inputmode="numeric">
+
+    <h3>予定</h3>
+    <label class="sw"><input type="checkbox" data-set="arrowAnim">矢印を動かす（左から右へ順に光る）</label>
+    <label class="sw"><input type="checkbox" data-set="schedBlink">予定の時刻になったら右下を点滅させる</label>
+
+    <h3>時刻合わせ</h3>
+    <p id="syncInfo" class="hint"></p>
+    <button id="syncNow">今すぐ合わせる</button>
+
+    <h3>画面</h3>
+    <p id="wakeInfo" class="hint"></p>
+    <button id="fullBtn">全画面にする</button>
+    <p class="hint">ホーム画面への追加：Android は Chrome のメニュー →「ホーム画面に追加」。iPad は Safari の共有ボタン →「ホーム画面に追加」。</p>
+    <p class="hint" id="verInfo"></p>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
