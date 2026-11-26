@@ -1,5 +1,5 @@
 // オペ時計：オフラインで動かすための保存係。版を上げるときは CACHE の数字を変える。
-const CACHE = 'ope-clock-1.0.7';
+const CACHE = 'ope-clock-1.0.8';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {

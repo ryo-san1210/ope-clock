@@ -1,6 +1,6 @@
 'use strict';
 /* オペ時計 */
-const VERSION = '1.0.7';
+const VERSION = '1.0.8';
 const KEY = 'opeclock.v1';
 const $ = (id) => document.getElementById(id);
 
@@ -25,7 +25,7 @@ function load() {
   if (!d) return base;
   const st = Object.assign(base.settings, d.settings || {});
   // 1.0.6 で矢印の初期設定を「動く」に変えた。それより前に入れた端末も一度だけ「動く」にそろえる
-  if (!(st.rev >= 2)) { st.arrowAnim = true; st.rev = 2; }
+  if (!(d.settings && d.settings.rev >= 2)) { st.arrowAnim = true; st.rev = 2; }
   return {
     settings: st,
     timer: Object.assign(base.timer, d.timer || {}),
