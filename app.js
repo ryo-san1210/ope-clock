@@ -1,6 +1,6 @@
 'use strict';
 /* オペ時計 */
-const VERSION = '1.0.9';
+const VERSION = '1.0.10';
 const KEY = 'opeclock.v1';
 const $ = (id) => document.getElementById(id);
 
@@ -614,7 +614,7 @@ function renderSettings() {
   const canFull = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
   const standalone = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone;
   $('fullBtn').classList.toggle('hidden', !canFull || standalone);
-  $('verInfo').textContent = 'オペ時計 ' + VERSION;
+  renderUpdateInfo();
 }
 document.querySelectorAll('#sheetSettings .seg3[data-set]').forEach(g => g.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
@@ -659,9 +659,41 @@ function wakeText() {
 document.addEventListener('pointerdown', () => { if (wakeState !== 'ok') wake(); }, { passive: true });
 
 /* ---------- オフライン対応 ---------- */
-if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+// 新しい版は、届いたあと「開いた直後」か「設定のボタン」で切り替える。本番中に勝手に画面を読み込み直さない
+let swReg = null, updateReady = false, shownAt = Date.now();
+function checkUpdate() { if (swReg && navigator.onLine) swReg.update().catch(() => {}); }
+function applyUpdate() { location.reload(); }
+function maybeAutoUpdate() {
+  if (updateReady && !locked && !anySheetOpen() && S.timer.runStart == null && Date.now() - shownAt < 20000) applyUpdate();
 }
+function renderUpdateInfo() {
+  $('verInfo').textContent = 'オペ時計 ' + VERSION + (updateReady ? '（新しい版が届いています）' : '');
+  $('updBtn').textContent = updateReady ? '新しい版に切り替える' : '新しい版があるか確かめる';
+}
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => { swReg = r; checkUpdate(); }).catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return; // 初めて入れたときは切り替え不要
+    updateReady = true; renderUpdateInfo(); maybeAutoUpdate();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    shownAt = Date.now();
+    if (updateReady) maybeAutoUpdate(); else checkUpdate();
+  });
+  window.addEventListener('online', checkUpdate);
+  setInterval(checkUpdate, 3600000);
+}
+$('updBtn').onclick = () => {
+  if (updateReady) { applyUpdate(); return; }
+  if (!swReg || !navigator.onLine) { toast('ネットにつながっていません', 2000); return; }
+  $('verInfo').textContent = '確かめています…';
+  swReg.update().then(() => setTimeout(() => {
+    renderUpdateInfo();
+    if (!updateReady && !(swReg.installing || swReg.waiting)) toast('いまの版が最新です', 2000);
+  }, 3000)).catch(() => { renderUpdateInfo(); toast('確かめられませんでした', 2000); });
+};
 
 /* ---------- 起動 ---------- */
 orient();
